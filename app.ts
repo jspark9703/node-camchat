@@ -14,6 +14,7 @@ import { UserRoomMapRepository } from './src/repositories/UserRoomMapRepository'
 import { UserService } from './src/services/UserService';
 import { RoomService } from './src/services/RoomService';
 import { AuthService } from './src/services/AuthService';
+import { SocketHandler } from './src/socket/SoketHandler';
 import { createUserRoutes } from './src/routes/userRoutes';
 import { createRoomRoutes } from './src/routes/roomRoutes';
 import { createAuthRoutes } from './src/routes/authRoutes';
@@ -30,13 +31,7 @@ const io = new SocketIOServer(server, {
   },
 });
 
-type RoomInfo = {
-  name: string;
-  creator: string;
-  users: Set<string>; // usernames
-};
-
-const roomsByName: Map<string, RoomInfo> = new Map();
+// Chat service will manage in-memory rooms and socket events
 
 // Middleware
 app.use(express.json());
@@ -73,136 +68,9 @@ AppDataSource.initialize()
       res.json({ status: 'ok' });
     });
 
-    io.on('connection', (socket) => {
-      // username will be set after client emits 'set_user'
-      socket.data.username = null as string | null;
-      socket.data.currentRoom = null as string | null;
-
-      const emitRoomList = () => {
-        const payload = Array.from(roomsByName.values()).map((r) => ({
-          name: r.name,
-          creator: r.creator,
-          userCount: r.users.size,
-        }));
-        io.emit('room_list_update', payload);
-      };
-
-      socket.on('set_user', (username: string) => {
-        if (typeof username === 'string' && username.trim()) {
-          socket.data.username = username.trim();
-        }
-      });
-
-      socket.on('request_room_list', () => {
-        const payload = Array.from(roomsByName.values()).map((r) => ({
-          name: r.name,
-          creator: r.creator,
-          userCount: r.users.size,
-        }));
-        socket.emit('room_list_update', payload);
-      });
-
-      socket.on('create_room', (roomName: string) => {
-        const username = socket.data.username as string | null;
-        if (!username) {
-          socket.emit('error', { message: '인증되지 않았습니다.' });
-          return;
-        }
-        const name = (roomName || '').trim();
-        if (!name) return;
-        if (roomsByName.has(name)) {
-          socket.emit('error', { message: '이미 존재하는 방입니다.' });
-          return;
-        }
-        roomsByName.set(name, { name, creator: username, users: new Set() });
-        socket.emit('room_created', { roomName: name });
-        emitRoomList();
-      });
-
-      socket.on('join_room', (roomName: string) => {
-        const username = socket.data.username as string | null;
-        if (!username) {
-          socket.emit('error', { message: '인증되지 않았습니다.' });
-          return;
-        }
-        const info = roomsByName.get(roomName);
-        if (!info) {
-          socket.emit('error', { message: '존재하지 않는 방입니다.' });
-          return;
-        }
-        if (socket.data.currentRoom && socket.data.currentRoom !== roomName) {
-          // leave previous first
-          const prev = roomsByName.get(socket.data.currentRoom);
-          if (prev) {
-            prev.users.delete(username);
-            socket.leave(socket.data.currentRoom);
-            io.to(socket.data.currentRoom).emit('user_left', { username });
-          }
-        }
-        socket.join(roomName);
-        socket.data.currentRoom = roomName;
-        info.users.add(username);
-        io.to(roomName).emit('user_joined', { username });
-        emitRoomList();
-      });
-
-      socket.on('leave_room', (roomName: string) => {
-        const username = socket.data.username as string | null;
-        if (!username) return;
-        const info = roomsByName.get(roomName);
-        if (!info) return;
-        info.users.delete(username);
-        socket.leave(roomName);
-        if (socket.data.currentRoom === roomName) socket.data.currentRoom = null;
-        io.to(roomName).emit('user_left', { username });
-        emitRoomList();
-      });
-
-      socket.on('delete_room', (roomName: string) => {
-        const username = socket.data.username as string | null;
-        if (!username) return;
-        const info = roomsByName.get(roomName);
-        if (!info) return;
-        if (info.creator !== username) {
-          socket.emit('error', { message: '방 생성자만 삭제할 수 있습니다.' });
-          return;
-        }
-        // Notify and make everyone leave
-        io.to(roomName).emit('room_deleted', { roomName });
-        io.in(roomName).socketsLeave(roomName);
-        roomsByName.delete(roomName);
-        if (socket.data.currentRoom === roomName) socket.data.currentRoom = null;
-        emitRoomList();
-      });
-
-      socket.on('send_message', (data: { message: string }) => {
-        const username = socket.data.username as string | null;
-        if (!username) return;
-        const roomName = socket.data.currentRoom as string | null;
-        if (!roomName) return;
-        const message = (data && data.message) ? String(data.message).slice(0, 500) : '';
-        if (!message) return;
-        io.to(roomName).emit('new_message', {
-          username,
-          message,
-          timestamp: Date.now(),
-        });
-      });
-
-      socket.on('disconnect', () => {
-        const username = socket.data.username as string | null;
-        if (!username) return;
-        const current = socket.data.currentRoom as string | null;
-        if (current) {
-          const info = roomsByName.get(current);
-          if (info) {
-            info.users.delete(username);
-            io.to(current).emit('user_left', { username });
-            emitRoomList();
-          }
-        }
-      });
-    });
+    // Initialize Chat Service (Socket.IO handlers)
+    const chatService = new SocketHandler(io);
+    chatService.initialize();
 
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
