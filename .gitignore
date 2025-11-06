@@ -1,0 +1,65 @@
+# Node & dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# dotenv environment variables
+.env
+.env.local
+.env.*.local
+
+# TypeScript build output
+dist/
+build/
+out/
+coverage/
+
+# logs
+logs
+*.log
+
+# database
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.pid
+
+# TypeORM CLI generated
+ormconfig.js
+ormconfig.json
+ormconfig.ts
+
+# IDE/project configs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# test output
+coverage/
+test-results/
+coverage-final.json
+
+# Misc
+tmp/
+temp/
+.cache/
+*.tgz
+
+# Express session dump (if any)
+/sessions/
+
+# Optional: ignore uploaded files
+uploads/
+public/uploads/
+storage/
+

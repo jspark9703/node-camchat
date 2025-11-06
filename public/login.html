@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login</title>
+	<style>
+		body { font-family: Arial, sans-serif; margin: 40px; }
+		.container { max-width: 560px; margin: 0 auto; }
+		.card { background: #f7f9fb; padding: 16px; border-radius: 8px; margin-top: 16px; }
+		input { width: 100%; padding: 10px; margin: 8px 0; }
+		button { padding: 10px 16px; margin-right: 8px; cursor: pointer; }
+		.row { display: flex; gap: 8px; }
+	</style>
+</head>
+<body>
+	<div class="container">
+        <h1>로그인</h1>
+		<div class="card">
+			<label>이메일</label>
+			<input id="email" type="email" placeholder="이메일" />
+			<label>비밀번호</label>
+			<input id="password" type="password" placeholder="비밀번호" />
+			<div class="row">
+                <button id="loginBtn">로그인</button>
+                <a href="/register.html">회원가입 페이지로</a>
+			</div>
+			<div id="loginSuccess" style="display:none; margin-top:10px;">
+				<span id="tokenMsg">로그인 성공! 아래 버튼으로 토큰을 복사하세요.</span>
+				<div class="row" style="margin-top:8px;">
+					<button id="copyTokenBtn">토큰 복사</button>
+					<button id="goHomeBtn">홈으로 이동</button>
+					<a href="https://www.jwt.io/" id="tryJwt">JWT 홈페이지로 이동</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script src="/front.js"></script>
+	<script>
+		window.addEventListener('DOMContentLoaded', async () => {
+			const me = await window.api.me();
+			if (me.authenticated) {
+				location.href = '/';
+				return;
+			}
+			
+			document.getElementById('loginBtn').addEventListener('click', async () => {
+				const email = document.getElementById('email').value.trim();
+				const password = document.getElementById('password').value.trim();
+				const res = await window.api.login(email, password);
+				if (res.ok) {
+					window.__lastToken = res.token || null;
+					document.getElementById('loginSuccess').style.display = 'block';
+					location.href = '/';
+				} else {
+					alert(res.error || '로그인 실패');
+				}
+			});
+			
+			document.getElementById('copyTokenBtn').addEventListener('click', async () => {
+				const token = window.api.getToken();
+				if (!token) {
+					alert('토큰이 없습니다. 다시 로그인해주세요.');
+					return;
+				}
+				try {
+					await navigator.clipboard.writeText(token);
+					alert('토큰이 복사되었습니다.');
+				} catch (e) {
+					alert('복사 실패. 브라우저 권한을 확인해주세요.');
+				}
+			});
+			
+			document.getElementById('tryJwt').addEventListener('click', () => {
+				window.open('https://www.jwt.io/', '_blank');
+			});
+			
+			document.getElementById('goHomeBtn').addEventListener('click', () => {
+				location.href = '/';
+			});
+		});
+	</script>
+</body>
+</html>

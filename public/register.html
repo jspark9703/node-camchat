@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Register</title>
+	<style>
+		body { font-family: Arial, sans-serif; margin: 40px; }
+		.container { max-width: 560px; margin: 0 auto; }
+		.card { background: #f7f9fb; padding: 16px; border-radius: 8px; margin-top: 16px; }
+		input { width: 100%; padding: 10px; margin: 8px 0; }
+		button { padding: 10px 16px; margin-right: 8px; cursor: pointer; }
+		.row { display: flex; gap: 8px; align-items: center; }
+		.small { font-size: 12px; color: #666; }
+		.msg-ok { color: #2e7d32; }
+		.msg-err { color: #c62828; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>회원가입</h1>
+		<div class="card">
+			<label>이메일</label>
+			<div class="row">
+				<input id="email" type="email" placeholder="이메일" />
+				<button id="duplBtn" type="button">중복체크</button>
+			</div>
+			<div id="duplMsg" class="small"></div>
+			<label>이름</label>
+			<input id="name" placeholder="이름" />
+			<label>비밀번호</label>
+			<input id="password1" type="password" placeholder="비밀번호" />
+			<label>비밀번호 확인</label>
+			<input id="password2" type="password" placeholder="비밀번호 확인" />
+			<div id="pwMsg" class="small"></div>
+			<div class="row" style="margin-top:8px;">
+				<button id="submitBtn" disabled>회원가입</button>
+				<a href="/login.html">로그인 페이지로</a>
+			</div>
+		</div>
+	</div>
+	<script src="/front.js"></script>
+	<script>
+		(function(){
+			let lastCheckedEmail = '';
+			let isEmailAvailable = false;
+			let doPwMatch = false;
+
+			function updateSubmitButton() {
+				const submit = document.getElementById('submitBtn');
+				const name = document.getElementById('name').value.trim();
+				submit.disabled = !(isEmailAvailable && doPwMatch && name);
+			}
+
+			async function checkDuplicate() {
+				const email = document.getElementById('email').value.trim();
+				if (!email) {
+					isEmailAvailable = false;
+					document.getElementById('duplMsg').textContent = '이메일을 입력하세요.';
+					document.getElementById('duplMsg').className = 'small msg-err';
+					updateSubmitButton();
+					return;
+				}
+				const res = await window.api.duplCheck(email);
+				lastCheckedEmail = email;
+				if (res && res.ok && res.hasOwnProperty('available')) {
+					isEmailAvailable = !!res.available;
+					document.getElementById('duplMsg').textContent = res.available ? '사용 가능한 이메일입니다.' : '이미 존재하는 이메일입니다.';
+					document.getElementById('duplMsg').className = 'small ' + (res.available ? 'msg-ok' : 'msg-err');
+				} else {
+					isEmailAvailable = false;
+					document.getElementById('duplMsg').textContent = '중복 체크 실패';
+					document.getElementById('duplMsg').className = 'small msg-err';
+				}
+				updateSubmitButton();
+			}
+
+			function checkPwMatch() {
+				const p1 = document.getElementById('password1').value;
+				const p2 = document.getElementById('password2').value;
+				doPwMatch = !!p1 && p1 === p2;
+				document.getElementById('pwMsg').textContent = doPwMatch ? '비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.';
+				document.getElementById('pwMsg').className = 'small ' + (doPwMatch ? 'msg-ok' : 'msg-err');
+				updateSubmitButton();
+			}
+
+			window.addEventListener('DOMContentLoaded', () => {
+				document.getElementById('duplBtn').addEventListener('click', checkDuplicate);
+				document.getElementById('email').addEventListener('input', () => {
+					// Invalidate previous dupl check when email changes
+					isEmailAvailable = false;
+					document.getElementById('duplMsg').textContent = '';
+					updateSubmitButton();
+				});
+				document.getElementById('name').addEventListener('input', updateSubmitButton);
+				document.getElementById('password1').addEventListener('blur', checkPwMatch);
+				document.getElementById('password2').addEventListener('blur', checkPwMatch);
+				document.getElementById('submitBtn').addEventListener('click', async () => {
+					const email = document.getElementById('email').value.trim();
+					const name = document.getElementById('name').value.trim();
+					const pw = document.getElementById('password1').value;
+					if (!email || !pw || !name) {
+						alert('이메일, 이름, 비밀번호를 모두 입력하세요.');
+						return;
+					}
+					if (!isEmailAvailable || email !== lastCheckedEmail) {
+						alert('중복체크를 먼저 진행하세요.');
+						return;
+					}
+					if (!doPwMatch) {
+						alert('비밀번호가 일치하지 않습니다.');
+						return;
+					}
+					const res = await window.api.signup(email, pw, name);
+					if (res && res.ok) {
+						alert('회원가입 성공! 자동으로 로그인되었습니다.');
+						location.href = '/index.html';
+					} else {
+						alert(res && res.error ? res.error : '회원가입 실패');
+					}
+				});
+			});
+		})();
+	</script>
+</body>
+</html>
+
+
