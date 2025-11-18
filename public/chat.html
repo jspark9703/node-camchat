@@ -22,6 +22,14 @@
 		.controls button { padding: 8px 12px; }
 		.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 		.badge { background: #2563eb; color: white; border-radius: 999px; padding: 2px 8px; font-size: 12px; }
+		.control-btn { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 13px; }
+		.control-btn:hover { background: #f3f4f6; }
+		.control-btn.active { background: #ef4444; color: white; border-color: #ef4444; }
+		.remote-video-container { position: relative; }
+		.remote-video-controls { position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); border-radius: 6px; padding: 6px; display: flex; align-items: center; gap: 8px; }
+		.remote-video-controls label { color: white; font-size: 11px; white-space: nowrap; }
+		.remote-video-controls input[type="range"] { flex: 1; }
+		.remote-video-label { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.6); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
 	</style>
 </head>
 <body>
@@ -36,7 +44,7 @@
 		</div>
 	</div>
 	<div class="container">
-		<div class="sideba r">
+		<div class="sidebar">
 			<h3>채팅방</h3>
 			<div class="controls" style="margin-bottom:8px;">
 				<input id="createRoomInput" placeholder="새 채팅방 이름" />
@@ -57,6 +65,14 @@
 					<div style="flex:0 0 320px;">
 						<video id="localVideo" autoplay muted playsinline style="width:320px; height:180px; background:#000; border-radius:8px;"></video>
 						<div style="font-size:12px; color:#6b7280; margin-top:4px;">내 카메라 미리보기</div>
+						<div class="media-controls" style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+							<button id="toggleCameraBtn" class="control-btn" style="flex:1; min-width:100px;">
+								<span id="cameraIcon">📹</span> 카메라 끄기
+							</button>
+							<button id="toggleMicBtn" class="control-btn" style="flex:1; min-width:100px;">
+								<span id="micIcon">🎤</span> 마이크 끄기
+							</button>
+						</div>
 					</div>
 					<div id="remoteVideos" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start;"></div>
 				</div>

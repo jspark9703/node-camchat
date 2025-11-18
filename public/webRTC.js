@@ -11,8 +11,11 @@
             this.localStream = null;
             this.peerConnections = new Map(); // username -> RTCPeerConnection
             this.remoteVideoEls = new Map(); // username -> HTMLVideoElement
+            this.remoteVideoContainers = new Map(); // username -> container div
             this.participantsOrdered = [];
             this.initializedSocketHandlers = false;
+            this.cameraEnabled = true;
+            this.micEnabled = true;
         }
 
         init(socket, username, refs) {
@@ -53,12 +56,16 @@
                 if (this.localStream && this.localStream.getTracks().some(t => t.readyState === 'live')) {
                     if (this.localVideo) this.localVideo.srcObject = this.localStream;
                     if (this.videoArea) this.videoArea.style.display = 'block';
+                    this._updateControlButtons();
                     return;
                 }
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 this.localStream = stream;
+                this.cameraEnabled = true;
+                this.micEnabled = true;
                 if (this.localVideo) this.localVideo.srcObject = stream;
                 if (this.videoArea) this.videoArea.style.display = 'block';
+                this._updateControlButtons();
             } catch (err) {
                 console.error('getUserMedia error:', err);
                 this.addSystemMessage('카메라/마이크 권한이 거부되었거나 사용할 수 없습니다.');
@@ -73,6 +80,78 @@
             if (this.localVideo) this.localVideo.srcObject = null;
             if (this.videoArea) this.videoArea.style.display = 'none';
             this.localStream = null;
+            this.cameraEnabled = false;
+            this.micEnabled = false;
+            this._updateControlButtons();
+        }
+
+        toggleCamera() {
+            if (!this.localStream) return;
+            const videoTrack = this.localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                this.cameraEnabled = !this.cameraEnabled;
+                videoTrack.enabled = this.cameraEnabled;
+                this._updateControlButtons();
+                // 모든 피어 연결에 변경사항 전송
+                this._updateTracksForAllPeers();
+            }
+        }
+
+        toggleMic() {
+            if (!this.localStream) return;
+            const audioTrack = this.localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                this.micEnabled = !this.micEnabled;
+                audioTrack.enabled = this.micEnabled;
+                this._updateControlButtons();
+                // 모든 피어 연결에 변경사항 전송
+                this._updateTracksForAllPeers();
+            }
+        }
+
+        _updateControlButtons() {
+            const cameraBtn = document.getElementById('toggleCameraBtn');
+            const micBtn = document.getElementById('toggleMicBtn');
+            const cameraIcon = document.getElementById('cameraIcon');
+            const micIcon = document.getElementById('micIcon');
+            
+            if (cameraBtn) {
+                if (this.cameraEnabled) {
+                    cameraBtn.textContent = '📹 카메라 끄기';
+                    cameraBtn.classList.remove('active');
+                } else {
+                    cameraBtn.textContent = '📹 카메라 켜기';
+                    cameraBtn.classList.add('active');
+                }
+            }
+            
+            if (micBtn) {
+                if (this.micEnabled) {
+                    micBtn.textContent = '🎤 마이크 끄기';
+                    micBtn.classList.remove('active');
+                } else {
+                    micBtn.textContent = '🎤 마이크 켜기';
+                    micBtn.classList.add('active');
+                }
+            }
+        }
+
+        _updateTracksForAllPeers() {
+            // 모든 피어 연결에 현재 트랙 상태 업데이트
+            this.peerConnections.forEach((pc, peerName) => {
+                const senders = pc.getSenders();
+                senders.forEach(sender => {
+                    if (sender.track) {
+                        if (sender.track.kind === 'video' && this.localStream) {
+                            const newTrack = this.localStream.getVideoTracks()[0];
+                            if (newTrack) sender.replaceTrack(newTrack);
+                        } else if (sender.track.kind === 'audio' && this.localStream) {
+                            const newTrack = this.localStream.getAudioTracks()[0];
+                            if (newTrack) sender.replaceTrack(newTrack);
+                        }
+                    }
+                });
+            });
         }
 
         cleanupAllPeers() {
@@ -83,6 +162,7 @@
             this.peerConnections.clear();
             if (this.remoteVideos) this.remoteVideos.innerHTML = '';
             this.remoteVideoEls.clear();
+            this.remoteVideoContainers.clear();
             this.participantsOrdered = [];
         }
 
@@ -99,20 +179,64 @@
             pc.ontrack = (e) => {
                 const [stream] = e.streams;
                 if (!stream) return;
+                let container = this.remoteVideoContainers.get(peerName);
                 let video = this.remoteVideoEls.get(peerName);
-                if (!video) {
+                
+                if (!container || !video) {
+                    // 컨테이너 생성
+                    container = document.createElement('div');
+                    container.className = 'remote-video-container';
+                    container.style.position = 'relative';
+                    container.style.width = '320px';
+                    container.style.height = '180px';
+                    
+                    // 비디오 요소 생성
                     video = document.createElement('video');
                     video.autoplay = true;
                     video.playsInline = true;
-                    video.style.width = '320px';
-                    video.style.height = '180px';
+                    video.style.width = '100%';
+                    video.style.height = '100%';
                     video.style.background = '#000';
                     video.style.borderRadius = '8px';
+                    video.style.objectFit = 'cover';
+                    
+                    // 사용자 이름 레이블
+                    const label = document.createElement('div');
+                    label.className = 'remote-video-label';
+                    label.textContent = peerName;
+                    
+                    // 볼륨 조절 컨트롤
+                    const controls = document.createElement('div');
+                    controls.className = 'remote-video-controls';
+                    const volumeLabel = document.createElement('label');
+                    volumeLabel.textContent = '🔊';
+                    volumeLabel.style.cursor = 'pointer';
+                    const volumeSlider = document.createElement('input');
+                    volumeSlider.type = 'range';
+                    volumeSlider.min = '0';
+                    volumeSlider.max = '100';
+                    volumeSlider.value = '100';
+                    volumeSlider.style.width = '100px';
+                    volumeSlider.addEventListener('input', (e) => {
+                        if (video) {
+                            video.volume = e.target.value / 100;
+                        }
+                    });
+                    controls.appendChild(volumeLabel);
+                    controls.appendChild(volumeSlider);
+                    
+                    container.appendChild(video);
+                    container.appendChild(label);
+                    container.appendChild(controls);
+                    
                     this.remoteVideoEls.set(peerName, video);
-                    if (this.remoteVideos) this.remoteVideos.appendChild(video);
+                    this.remoteVideoContainers.set(peerName, container);
+                    if (this.remoteVideos) this.remoteVideos.appendChild(container);
                     this._reorderRemoteVideos();
                 }
                 video.srcObject = stream;
+                // 초기 볼륨 설정
+                video.volume = 1.0;
             };
             pc.onconnectionstatechange = () => {
                 if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
@@ -135,17 +259,24 @@
             const pc = this.peerConnections.get(peerName);
             if (pc) { try { pc.close(); } catch(_){} }
             this.peerConnections.delete(peerName);
-            const video = this.remoteVideoEls.get(peerName);
-            if (video) { try { video.srcObject = null; } catch(_){} video.remove(); }
+            const container = this.remoteVideoContainers.get(peerName);
+            if (container) { 
+                try { 
+                    const video = this.remoteVideoEls.get(peerName);
+                    if (video) video.srcObject = null;
+                } catch(_){} 
+                container.remove(); 
+            }
             this.remoteVideoEls.delete(peerName);
+            this.remoteVideoContainers.delete(peerName);
         }
 
         _reorderRemoteVideos() {
             if (!this.remoteVideos || !this.participantsOrdered.length) return;
             const fragment = document.createDocumentFragment();
             this.participantsOrdered.filter(u => u !== this.username).forEach(u => {
-                const el = this.remoteVideoEls.get(u);
-                if (el) fragment.appendChild(el);
+                const container = this.remoteVideoContainers.get(u);
+                if (container) fragment.appendChild(container);
             });
             this.remoteVideos.appendChild(fragment);
         }

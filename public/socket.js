@@ -142,6 +142,26 @@ function setupEventListeners() {
     messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
+
+    // 카메라/마이크 토글
+    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const toggleMicBtn = document.getElementById('toggleMicBtn');
+    
+    if (toggleCameraBtn) {
+        toggleCameraBtn.addEventListener('click', () => {
+            if (window.WebRTCManager) {
+                window.WebRTCManager.toggleCamera();
+            }
+        });
+    }
+    
+    if (toggleMicBtn) {
+        toggleMicBtn.addEventListener('click', () => {
+            if (window.WebRTCManager) {
+                window.WebRTCManager.toggleMic();
+            }
+        });
+    }
 }
 
 function createRoom() {
